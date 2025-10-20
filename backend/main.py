@@ -122,10 +122,46 @@ async def filter_users(campus: str = 'Heilbronn', email_domain: str = '42heilbro
     headers = {'Authorization': f'Bearer {token}'}
     matches = []
     page = 1
+    use_campus_endpoint = False
+    campus_id = None
+    # try to resolve campus name to id
+    try:
+        async with httpx.AsyncClient() as client:
+            camps = await client.get('https://api.intra.42.fr/v2/campus', headers=headers, timeout=10.0)
+            camps.raise_for_status()
+            camps_list = camps.json()
+            for c in camps_list:
+                if campus.lower() in (c.get('name') or '').lower():
+                    campus_id = c.get('id')
+                    use_campus_endpoint = True
+                    break
+    except Exception:
+        # if campus lookup fails, we'll fall back to global users endpoint
+        use_campus_endpoint = False
+
+    # If include_login provided, fetch that user first (we'll add them to results later)
+    include_user = None
+    if include_login:
+        try:
+            inc_url = f'https://api.intra.42.fr/v2/users/{include_login}'
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(inc_url, headers=headers, timeout=10.0)
+                if resp.status_code == 200:
+                    inc = resp.json()
+                    # check active
+                    active = inc.get('active?') if 'active?' in inc else inc.get('active')
+                    if active:
+                        include_user = inc
+        except Exception:
+            # ignore errors; include_user remains None
+            include_user = None
 
     async with httpx.AsyncClient() as client:
         while page <= max_pages:
-            url = f'https://api.intra.42.fr/v2/users?per_page={per_page}&page={page}'
+            if use_campus_endpoint and campus_id:
+                url = f'https://api.intra.42.fr/v2/campus/{campus_id}/users?per_page={per_page}&page={page}'
+            else:
+                url = f'https://api.intra.42.fr/v2/users?per_page={per_page}&page={page}'
             try:
                 resp = await client.get(url, headers=headers, timeout=15.0)
                 resp.raise_for_status()
