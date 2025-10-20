@@ -121,56 +121,31 @@ async def filter_users(campus: str = 'Heilbronn', email_domain: str = '42heilbro
     token = await fetch_42_token()
     headers = {'Authorization': f'Bearer {token}'}
     matches = []
-    page = 1
-    use_campus_endpoint = False
     campus_id = None
     campus_name = None
-    campus_email_extension = None
-    # try to resolve campus name to id
     try:
         async with httpx.AsyncClient() as client:
-            camps = await client.get('https://api.intra.42.fr/v2/campus', headers=headers, timeout=10.0)
-            camps.raise_for_status()
-            camps_list = camps.json()
+            # request a large per_page so we don't miss campuses due to pagination
+            resp = await client.get('https://api.intra.42.fr/v2/campus?per_page=300', headers=headers, timeout=10.0)
+            resp.raise_for_status()
+            camps_list = resp.json()
             for c in camps_list:
-                # match user-provided campus substring against both name and city
                 name = (c.get('name') or '')
                 city = (c.get('city') or '')
-                email_ext = (c.get('email_extension') or '')
-                if campus.lower() in name.lower() or campus.lower() in city.lower() or campus.lower() in email_ext.lower():
+                if campus.lower() in name.lower() or campus.lower() in city.lower():
                     campus_id = c.get('id')
-                    # prefer the official name, fall back to city when name missing
                     campus_name = name or city
-                    campus_email_extension = c.get('email_extension')
-                    use_campus_endpoint = True
                     break
-    except Exception:
-        # if campus lookup fails, we'll fall back to global users endpoint
-        use_campus_endpoint = False
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f'42 API error when listing campuses: {str(e)}')
 
-    # If include_login provided, fetch that user first (we'll add them to results later)
-    include_user = None
-    if include_login:
-        try:
-            inc_url = f'https://api.intra.42.fr/v2/users/{include_login}'
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(inc_url, headers=headers, timeout=10.0)
-                if resp.status_code == 200:
-                    inc = resp.json()
-                    # check active
-                    active = inc.get('active?') if 'active?' in inc else inc.get('active')
-                    if active:
-                        include_user = inc
-        except Exception:
-            # ignore errors; include_user remains None
-            include_user = None
+    if not campus_id:
+        raise HTTPException(status_code=404, detail=f'Campus not found for "{campus}"')
 
+    page = 1
     async with httpx.AsyncClient() as client:
         while page <= max_pages:
-            if use_campus_endpoint and campus_id:
-                url = f'https://api.intra.42.fr/v2/campus/{campus_id}/users?per_page={per_page}&page={page}'
-            else:
-                url = f'https://api.intra.42.fr/v2/users?per_page={per_page}&page={page}'
+            url = f'https://api.intra.42.fr/v2/campus/{campus_id}/users?per_page={per_page}&page={page}'
             try:
                 resp = await client.get(url, headers=headers, timeout=15.0)
                 resp.raise_for_status()
@@ -183,64 +158,15 @@ async def filter_users(campus: str = 'Heilbronn', email_domain: str = '42heilbro
             if not users:
                 break
 
-            for u in users:
-                # when calling /v2/campus/{id}/users the items may be wrapped
-                # (for example as campus_user objects containing a 'user' field).
-                # Unwrap to a user dict if needed.
-                if use_campus_endpoint and isinstance(u, dict) and 'user' in u and isinstance(u.get('user'), dict):
-                    u = u.get('user')
-                # check active flag (field may be 'active?' in some responses)
+            for item in users:
+                # some endpoints return campus_user objects containing a 'user' field
+                u = item.get('user') if isinstance(item, dict) and 'user' in item and isinstance(item.get('user'), dict) else item
+                if not isinstance(u, dict):
+                    continue
+                # only include active users
                 active = u.get('active?') if 'active?' in u else u.get('active')
                 if not active:
                     continue
-
-                email = (u.get('email') or '').lower()
-
-                # When using campus endpoint we already scoped by campus, so avoid
-                # per-user campus substring checks. Build a normalized campus_list
-                # so downstream code can check email extensions uniformly.
-                if use_campus_endpoint and campus_name:
-                    campus_list = [{'name': campus_name, 'email_extension': campus_email_extension}]
-                    campus_names = campus_name or ''
-                else:
-                    # campuses may be an array of campus objects; normalize to list
-                    campuses = u.get('campus') or u.get('campus_users') or []
-                    campus_list = []
-                    if isinstance(campuses, list):
-                        # campus entries may be objects with 'name' or full campus objects
-                        for c in campuses:
-                            if isinstance(c, dict):
-                                name = c.get('name') or c.get('city') or ''
-                                campus_list.append({'name': name, 'email_extension': c.get('email_extension')})
-                            else:
-                                campus_list.append({'name': str(c), 'email_extension': None})
-                    else:
-                        # single object
-                        c = campuses
-                        if isinstance(c, dict):
-                            campus_list.append({'name': c.get('name') or c.get('city') or '', 'email_extension': c.get('email_extension')})
-
-                    campus_names = ' '.join([c.get('name','') for c in campus_list])
-
-                    # check campus substring (only when not using campus endpoint)
-                    if campus.lower() not in campus_names.lower():
-                        continue
-
-                # check email domain: either user's email endswith email_domain OR matches campus.email_extension
-                domain_ok = False
-                if email and email.endswith(email_domain.lower()):
-                    domain_ok = True
-                else:
-                    # check campus email extensions
-                    for c in campus_list:
-                        ext = (c.get('email_extension') or '').lower()
-                        if ext and email.endswith(ext):
-                            domain_ok = True
-                            break
-                if not domain_ok:
-                    continue
-
-                # match the same returned shape as `/user/{login}`: include raw user
                 matches.append({
                     'login': u.get('login'),
                     'displayname': u.get('displayname'),
