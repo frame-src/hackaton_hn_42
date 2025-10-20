@@ -124,6 +124,8 @@ async def filter_users(campus: str = 'Heilbronn', email_domain: str = '42heilbro
     page = 1
     use_campus_endpoint = False
     campus_id = None
+    campus_name = None
+    campus_email_extension = None
     # try to resolve campus name to id
     try:
         async with httpx.AsyncClient() as client:
@@ -131,8 +133,15 @@ async def filter_users(campus: str = 'Heilbronn', email_domain: str = '42heilbro
             camps.raise_for_status()
             camps_list = camps.json()
             for c in camps_list:
-                if campus.lower() in (c.get('name') or '').lower():
+                # match user-provided campus substring against both name and city
+                name = (c.get('name') or '')
+                city = (c.get('city') or '')
+                email_ext = (c.get('email_extension') or '')
+                if campus.lower() in name.lower() or campus.lower() in city.lower() or campus.lower() in email_ext.lower():
                     campus_id = c.get('id')
+                    # prefer the official name, fall back to city when name missing
+                    campus_name = name or city
+                    campus_email_extension = c.get('email_extension')
                     use_campus_endpoint = True
                     break
     except Exception:
@@ -175,6 +184,11 @@ async def filter_users(campus: str = 'Heilbronn', email_domain: str = '42heilbro
                 break
 
             for u in users:
+                # when calling /v2/campus/{id}/users the items may be wrapped
+                # (for example as campus_user objects containing a 'user' field).
+                # Unwrap to a user dict if needed.
+                if use_campus_endpoint and isinstance(u, dict) and 'user' in u and isinstance(u.get('user'), dict):
+                    u = u.get('user')
                 # check active flag (field may be 'active?' in some responses)
                 active = u.get('active?') if 'active?' in u else u.get('active')
                 if not active:
@@ -182,28 +196,35 @@ async def filter_users(campus: str = 'Heilbronn', email_domain: str = '42heilbro
 
                 email = (u.get('email') or '').lower()
 
-                # campuses may be an array of campus objects; normalize to list
-                campuses = u.get('campus') or u.get('campus_users') or []
-                campus_list = []
-                if isinstance(campuses, list):
-                    # campus entries may be objects with 'name' or full campus objects
-                    for c in campuses:
-                        if isinstance(c, dict):
-                            name = c.get('name') or c.get('city') or ''
-                            campus_list.append({'name': name, 'email_extension': c.get('email_extension')})
-                        else:
-                            campus_list.append({'name': str(c), 'email_extension': None})
+                # When using campus endpoint we already scoped by campus, so avoid
+                # per-user campus substring checks. Build a normalized campus_list
+                # so downstream code can check email extensions uniformly.
+                if use_campus_endpoint and campus_name:
+                    campus_list = [{'name': campus_name, 'email_extension': campus_email_extension}]
+                    campus_names = campus_name or ''
                 else:
-                    # single object
-                    c = campuses
-                    if isinstance(c, dict):
-                        campus_list.append({'name': c.get('name') or c.get('city') or '', 'email_extension': c.get('email_extension')})
+                    # campuses may be an array of campus objects; normalize to list
+                    campuses = u.get('campus') or u.get('campus_users') or []
+                    campus_list = []
+                    if isinstance(campuses, list):
+                        # campus entries may be objects with 'name' or full campus objects
+                        for c in campuses:
+                            if isinstance(c, dict):
+                                name = c.get('name') or c.get('city') or ''
+                                campus_list.append({'name': name, 'email_extension': c.get('email_extension')})
+                            else:
+                                campus_list.append({'name': str(c), 'email_extension': None})
+                    else:
+                        # single object
+                        c = campuses
+                        if isinstance(c, dict):
+                            campus_list.append({'name': c.get('name') or c.get('city') or '', 'email_extension': c.get('email_extension')})
 
-                campus_names = ' '.join([c.get('name','') for c in campus_list])
+                    campus_names = ' '.join([c.get('name','') for c in campus_list])
 
-                # check campus substring
-                if campus.lower() not in campus_names.lower():
-                    continue
+                    # check campus substring (only when not using campus endpoint)
+                    if campus.lower() not in campus_names.lower():
+                        continue
 
                 # check email domain: either user's email endswith email_domain OR matches campus.email_extension
                 domain_ok = False
@@ -219,11 +240,12 @@ async def filter_users(campus: str = 'Heilbronn', email_domain: str = '42heilbro
                 if not domain_ok:
                     continue
 
+                # match the same returned shape as `/user/{login}`: include raw user
                 matches.append({
                     'login': u.get('login'),
                     'displayname': u.get('displayname'),
                     'email': u.get('email'),
-                    'campus': campus_names,
+                    'raw': u,
                 })
 
             page += 1
@@ -246,7 +268,8 @@ async def filter_users(campus: str = 'Heilbronn', email_domain: str = '42heilbro
                                 campus_names = ', '.join([c.get('name','') for c in campuses if isinstance(c, dict)])
                             elif isinstance(campuses, dict):
                                 campus_names = campuses.get('name','')
-                            matches.append({'login': u.get('login'), 'displayname': u.get('displayname'), 'email': u.get('email'), 'campus': campus_names})
+                            # ensure include_login uses the same shape as /user/{login}
+                            matches.append({'login': u.get('login'), 'displayname': u.get('displayname'), 'email': u.get('email'), 'raw': u})
         except Exception:
             # ignore errors for include_login so endpoint still returns main results
             pass
