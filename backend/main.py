@@ -104,3 +104,116 @@ async def get_user(login: str):
         'raw': data,
     }
 
+
+@app.get('/users/filter')
+async def filter_users(campus: str = 'Heilbronn', email_domain: str = '42heilbronn.de', per_page: int = 100, max_pages: int = 5, include_login: str | None = None):
+    """Fetch users from 42 API, page through results and return users who:
+    - have an email that ends with `email_domain` (case-insensitive)
+    - are listed on a campus that contains `campus` (case-insensitive)
+    - have active? == true
+
+    Query params:
+    - campus: substring to search in user's campus names (default 'Heilbronn')
+    - email_domain: domain suffix to match in email (default '42heilbronn.student.de')
+    - per_page: items per page when calling 42 API
+    - max_pages: maximum pages to fetch (safeguard)
+    """
+    token = await fetch_42_token()
+    headers = {'Authorization': f'Bearer {token}'}
+    matches = []
+    page = 1
+
+    async with httpx.AsyncClient() as client:
+        while page <= max_pages:
+            url = f'https://api.intra.42.fr/v2/users?per_page={per_page}&page={page}'
+            try:
+                resp = await client.get(url, headers=headers, timeout=15.0)
+                resp.raise_for_status()
+                users = resp.json()
+            except httpx.HTTPStatusError as e:
+                raise HTTPException(status_code=502, detail=f'42 API error: {e.response.status_code}')
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=str(e))
+
+            if not users:
+                break
+
+            for u in users:
+                # check active flag (field may be 'active?' in some responses)
+                active = u.get('active?') if 'active?' in u else u.get('active')
+                if not active:
+                    continue
+
+                email = (u.get('email') or '').lower()
+
+                # campuses may be an array of campus objects; normalize to list
+                campuses = u.get('campus') or u.get('campus_users') or []
+                campus_list = []
+                if isinstance(campuses, list):
+                    # campus entries may be objects with 'name' or full campus objects
+                    for c in campuses:
+                        if isinstance(c, dict):
+                            name = c.get('name') or c.get('city') or ''
+                            campus_list.append({'name': name, 'email_extension': c.get('email_extension')})
+                        else:
+                            campus_list.append({'name': str(c), 'email_extension': None})
+                else:
+                    # single object
+                    c = campuses
+                    if isinstance(c, dict):
+                        campus_list.append({'name': c.get('name') or c.get('city') or '', 'email_extension': c.get('email_extension')})
+
+                campus_names = ' '.join([c.get('name','') for c in campus_list])
+
+                # check campus substring
+                if campus.lower() not in campus_names.lower():
+                    continue
+
+                # check email domain: either user's email endswith email_domain OR matches campus.email_extension
+                domain_ok = False
+                if email and email.endswith(email_domain.lower()):
+                    domain_ok = True
+                else:
+                    # check campus email extensions
+                    for c in campus_list:
+                        ext = (c.get('email_extension') or '').lower()
+                        if ext and email.endswith(ext):
+                            domain_ok = True
+                            break
+                if not domain_ok:
+                    continue
+
+                matches.append({
+                    'login': u.get('login'),
+                    'displayname': u.get('displayname'),
+                    'email': u.get('email'),
+                    'campus': campus_names,
+                })
+
+            page += 1
+
+    # If include_login provided, ensure that user is present in results
+    if include_login:
+        try:
+            inc_url = f'https://api.intra.42.fr/v2/users/{include_login}'
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(inc_url, headers=headers, timeout=10.0)
+                if resp.status_code == 200:
+                    u = resp.json()
+                    active = u.get('active?') if 'active?' in u else u.get('active')
+                    if active:
+                        # add only if not already present
+                        if not any(m['login'] == u.get('login') for m in matches):
+                            campuses = u.get('campus') or []
+                            campus_names = ''
+                            if isinstance(campuses, list):
+                                campus_names = ', '.join([c.get('name','') for c in campuses if isinstance(c, dict)])
+                            elif isinstance(campuses, dict):
+                                campus_names = campuses.get('name','')
+                            matches.append({'login': u.get('login'), 'displayname': u.get('displayname'), 'email': u.get('email'), 'campus': campus_names})
+        except Exception:
+            # ignore errors for include_login so endpoint still returns main results
+            pass
+
+    return {'count': len(matches), 'results': matches}
+
