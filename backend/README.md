@@ -68,3 +68,12 @@ curl -s 'http://127.0.0.1:8000/users/filter?campus=Heilbronn&email_domain=@42hei
 Notes:
 - The endpoint requires that `CLIENT_ID` and `CLIENT_SECRET` are set as environment variables (used to fetch the application token). See project setup above.
 - Adjust `max_pages` if you need to search a larger user base; this endpoint is conservative by default to avoid excessive requests.
+
+Include specific login in results:
+
+You can force-include a specific user (by login) in the results even if they don't match the campus/email filters by using `include_login`.
+
+```bash
+# ensure user 'trosinsk' appears in results
+curl -s 'http://127.0.0.1:8000/users/filter?include_login=trosinsk' | jq
+```
