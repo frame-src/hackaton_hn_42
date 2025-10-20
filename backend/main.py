@@ -2,9 +2,11 @@ from fastapi import FastAPI, HTTPException
 import httpx
 import os
 import time
+from dotenv import load_dotenv
+
 
 app = FastAPI(title="App", version="1.0.0")
-
+load_dotenv()
 
 @app.get("/")
 async def root():
