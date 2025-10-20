@@ -25,6 +25,10 @@ pip install -r requirements.txt
 # Run the App
 uvicorn main:app --reload
 ```
+or 
+```bash
+python -m uvicorn main:app --reload
+```
 curl and test:
 http://127.0.0.1:8000/ → Root endpoint
 http://127.0.0.1:8000/ping → Health check
