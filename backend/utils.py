@@ -1,8 +1,11 @@
 import requests
 from lxml import html
 
+URI=  "http://localhost:8000"
+
+
 def intra_list():
-    url = "http://localhost:8000/users/filter"
+    url = f"{URI}/users/filter"
     params = {
         "campus": "Heilbronn",
         "email_domain": "42heilbronn.de",
@@ -17,7 +20,7 @@ def intra_list():
 
 
 def projects_list_per_user(login):
-    url = f'http://localhost:8000/user/{login}'
+    url = f'{URI}/user/{login}'
     headers = {"accept": "application/json"}
 
     response = requests.get(url, headers=headers)

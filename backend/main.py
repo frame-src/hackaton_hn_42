@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import requests
 from playwright.async_api import async_playwright
 
+URI =  "http://localhost:8000"
 
 app = FastAPI(title="App", version="1.0.0")
 load_dotenv()
@@ -233,7 +234,7 @@ async def get_user_evaluators(user_id: int):
         project_id = team.get("project_id")
         project_path = team.get("project_gitlab_path")
         evaluated = team.get("correcteds", {})
-        if evaluated.get("id") == user_id:
+        if evaluated.get("id") == user_id and not intra:
             intra = evaluated.get("login")
         evaluator = evaluation.get("corrector", {})
         evaluator_id = evaluator.get("id")
