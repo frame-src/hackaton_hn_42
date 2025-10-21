@@ -205,18 +205,47 @@ async def filter_users(campus: str = 'Heilbronn', email_domain: str = '42heilbro
     return {'count': len(matches), 'results': matches}
 
 import requests
+from playwright.async_api import async_playwright
 
 @app.get("/eval_page")
 async def fetch_data_eval_page(url: str):
-    """
-    Fetch data from an external API     using httpx.
-    """
-    token = await fetch_42_token()
-    headers = {'Authorization': f'Bearer {token}'}
+ # get your token the way you already do
+    token = await fetch_42_token()  # keep your implementation
+    if not token:
+        raise HTTPException(status_code=500, detail="failed to fetch token")
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, headers=headers)
+    # headers you want sent with every request from the headless browser
+    extra_headers = {
+        "Authorization": f"Bearer {token}",
+        # user-agent + accept are optional but often helpful
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+    }
 
-    # Assuming the response is JSON
-        print(response.text)
-    return None
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            # create a context with our headers so every request from the browser includes them
+            context = await browser.new_context(extra_http_headers=extra_headers)
+            page = await context.new_page()
+
+            # navigate and wait for network to be mostly idle so JS can finish
+            response = await page.goto(url, wait_until="networkidle")
+
+            # if navigation returned a Response, extract its status
+            status = response.status if response else 200
+
+            # get the fully rendered HTML
+            content = await page.content()
+
+            await context.close()
+            await browser.close()
+
+        return Response(content=content, status_code=status, media_type="text/html")
+
+    except PWTimeoutError:
+        raise HTTPException(status_code=504, detail="Playwright timed out loading the page")
+    except Exception as e:
+        # keep it simple: return 502 with the error message
+        raise HTTPException(status_code=502, detail=str(e))
