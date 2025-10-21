@@ -32,26 +32,6 @@ def projects_list_per_user(login):
     return projects_url
 
 
-def scrape_first_three_texts(url):
-    """Scrape the first 3 correction-item link texts from the given project page"""
-    headers = {
-        "Cookie": "_intra_42_session=YOUR_SESSION_COOKIE_HERE",
-        "User-Agent": "Mozilla/5.0"
-    }
-    response = requests.get(url, headers=headers)
-    tree = html.fromstring(response.content)
-    # Correct and valid XPath
-    texts = tree.xpath('//div[contains(@class, "correction-item")]//a/text()')
-    # Return only the first 3 and strip whitespace
-    return [t.strip() for t in texts[:3] if t.strip()]
-
-
-if __name__ == "__main__":
-    # login = "trosinsk"
-    # projects_url = projects_list_per_user(login)
-    # for pr in projects_url:
-    #     texts = scrape_first_three_texts(pr)
-    endpoint_url = "http://localhost:8000/eval_page"
-    url = "https://projects.intra.42.fr/projects/42cursus-fract-ol/projects_users/3452857"
-    response = requests.get(endpoint_url, params={"url": url})
-    print(response.text)
+def create_mail(intra:str) -> str:
+    email= f"{intra}@student.42heilbronn.de"
+    return email
