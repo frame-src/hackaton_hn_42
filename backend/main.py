@@ -38,7 +38,7 @@ async def fetch_data(url: str):
 
 # --- 42 Intra API helpers ---
 _token_cache = {"access_token": None, "expires_at": 0}
-@app.post("/token")
+# @app.post("/token")
 async def fetch_42_token() -> str:
     """Fetch an application token using client_credentials grant and cache it in-memory."""
     client_id = os.getenv('CLIENT_ID')
@@ -204,3 +204,19 @@ async def filter_users(campus: str = 'Heilbronn', email_domain: str = '42heilbro
 
     return {'count': len(matches), 'results': matches}
 
+import requests
+
+@app.get("/eval_page")
+async def fetch_data_eval_page(url: str):
+    """
+    Fetch data from an external API     using httpx.
+    """
+    token = await fetch_42_token()
+    headers = {'Authorization': f'Bearer {token}'}
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+
+    # Assuming the response is JSON
+        print(response.text)
+    return None
