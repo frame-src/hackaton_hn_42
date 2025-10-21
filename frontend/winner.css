@@ -1,0 +1,99 @@
+body {
+    background: #fffaf200;
+  }
+  
+  .winner-card {
+    background: #fff8e1;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    padding: 25px;
+    text-align: center;
+    margin-top: 20px;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;1
+  }
+  
+  .winner-card img {
+    width: 200px;
+    height: 200px;
+    object-fit: cover;
+    border-radius: 50%;
+    margin-bottom: 20px;
+    border: 4px solid gold;
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+  }
+  
+  .winner-card h2 {
+    font-size: 1.8rem;
+    color: #333;
+    margin-bottom: 10px;
+  }
+  
+  .winner-card .description {
+    font-size: 1rem;
+    color: #555;
+    line-height: 1.4;
+    padding: 0 10px;
+  }
+  
+  .back-link {
+    text-decoration: none;
+    color: #007BFF;
+    font-weight: bold;
+  }
+  
+  .back-link:hover {
+    text-decoration: underline;
+  }
+  
+
+  #month_winner {
+  width: 200px;           /* or whatever size fits your layout */
+  height: 200px;
+  border-radius: 50%;     /* this makes it round */
+  object-fit: cover;      /* ensures the image fills the circle properly */
+  border: 4px solid gold; /* optional: makes it stand out */
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.5); /* soft glow */
+  display: block;
+  margin: 20px auto;      /* center it */
+}
+
+.project-card {
+    background: #fff8e1;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    padding: 15px;
+    text-align: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    max-width: 250px;
+    margin: 0 auto;
+  }
+  
+  .project-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  }
+  
+  .project-card img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    border: 2px solid gold;
+  }
+  
+  .project-card h3 {
+    font-size: 1rem;
+    color: #333;
+    margin: 0;
+  }
+  
+  .project-card a {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }

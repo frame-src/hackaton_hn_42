@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="styles.css">
+  <script src="script.js" defer></script>
+  <title>42 Hall Of Fame</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    button { margin: 5px; padding: 10px 15px; cursor: pointer; }
+    pre { background: #f0f0f0; padding: 10px; border-radius: 5px; }
+  </style>
+</head>
+<body>
+     <!-- Logo -->
+  <img src="img/logo.png" alt="Logo" id="logo">
+  <h1>42 Heilbronn Hall of Fame</h1>
+  <button onclick="window.location.href='winner.html'">🏆 See Winner of the Month</button>
+  <button onclick="callBackend('/api/endpoint2')">Best of All Time</button>
+  <pre id="output">No data yet</pre>
+  <div id="hall-of-fame" class="hof-grid">
+    <!-- People cards appear here -->
+  </div>
+</body>
+</html>
