@@ -228,14 +228,11 @@ async def get_user_evaluators(user_id: int):
         "evaluators": []
     })
     evaluated = ""
-    intra = ""
     for evaluation in resp.json():
         team = evaluation.get("team", {})
         project_id = team.get("project_id")
         project_path = team.get("project_gitlab_path")
         evaluated = team.get("correcteds", {})
-        if evaluated.get("id") == user_id and not intra:
-            intra = evaluated.get("login")
         evaluator = evaluation.get("corrector", {})
         evaluator_id = evaluator.get("id")
         evaluator_name = evaluator.get("login")
@@ -251,12 +248,6 @@ async def get_user_evaluators(user_id: int):
                 "name": evaluator_name,
                 "email": evaluator_email
             })
-    return_data = {"intra": intra, "info": list(projects.values())}
+    return_data = list(projects.values())
     return return_data
 
-
-
-
-    # return dict(projects)
-
-        # return None
